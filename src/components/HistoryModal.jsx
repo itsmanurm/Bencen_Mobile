@@ -38,13 +38,127 @@ export function HistoryModal({ item, onClose, onAddProgress }) {
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
-                    {/* Item Summary */}
-                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                        <p className="text-sm font-medium text-neutral-800 leading-snug">{item.descripcion}</p>
-                        <div className="flex justify-between items-end mt-2">
-                            <span className="text-xs text-neutral-500">Total: {Number(item.cantidad).toLocaleString('es-AR')} {item.unidad}</span>
-                            {/* Calculated Total Progress could go here */}
+                    {/* Item Summary & Stats */}
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
+                        <div>
+                            <p className="text-sm font-medium text-neutral-800 leading-snug">{item.descripcion}</p>
+                            <div className="flex justify-between items-end mt-1">
+                                <span className="text-xs text-neutral-500">Total: {Number(item.cantidad).toLocaleString('es-AR')} {item.unidad}</span>
+                            </div>
                         </div>
+
+                        {/* Progress Logic */}
+                        {(() => {
+                            // Calculate cumulative progress sorted by date
+                            const sortedHistory = [...history].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+                            let runningTotal = 0;
+                            const dataPoints = sortedHistory.map(h => {
+                                runningTotal += h.avance;
+                                return { date: h.fecha, total: runningTotal };
+                            });
+
+                            const totalProgress = runningTotal;
+                            const isComplete = totalProgress >= 100;
+
+                            // Chart Generation
+                            const height = 60; // Increased internal height resolution
+                            const width = 300; // Increased internal width resolution
+                            const paddingX = 10; // Padding to avoid clipping dots
+                            const paddingY = 5;
+
+                            const maxVal = 100;
+
+                            // Generate points for SVG Polyline
+                            let points = "";
+                            const effectiveWidth = width - (paddingX * 2);
+
+                            if (dataPoints.length > 0) {
+                                // If we only have one point, we can't draw a line. 
+                                // Let's synthesize a "start" point at 0 if user wants timeline feel? 
+                                // OR just center the single point.
+                                // Logic: Distribute points evenly across effectiveWidth
+
+                                points = dataPoints.map((p, i) => {
+                                    const x = dataPoints.length === 1
+                                        ? width / 2
+                                        : paddingX + (i * (effectiveWidth / (dataPoints.length - 1)));
+
+                                    // Inverted Y (SVG coords)
+                                    // Scale value to height (minus paddingY to avoid clipping top)
+                                    const y = height - paddingY - ((p.total / maxVal) * (height - (paddingY * 2)));
+                                    return `${x},${y}`;
+                                }).join(' ');
+                            }
+
+                            // Generate Fill Path
+                            // Start at bottom-left (or first X), go to line points, end at bottom-right (or last X)
+                            const firstX = dataPoints.length === 1 ? width / 2 : paddingX;
+                            const lastX = dataPoints.length === 1 ? width / 2 : width - paddingX;
+
+                            const fillPoints = dataPoints.length > 0
+                                ? `${firstX},${height} ${points} ${lastX},${height}`
+                                : "";
+
+                            return (
+                                <div className="pt-2 border-t border-gray-100">
+                                    <div className="flex items-baseline justify-between mb-2">
+                                        <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Avance Total</span>
+                                        <span className={`text-2xl font-black ${isComplete ? 'text-green-600' : 'text-neutral-900'}`}>
+                                            {totalProgress.toFixed(2)}%
+                                        </span>
+                                    </div>
+
+                                    {/* Mini Chart */}
+                                    {dataPoints.length > 0 && (
+                                        <div className="h-24 w-full bg-gray-50 rounded-lg relative overflow-hidden flex items-end border border-gray-100">
+                                            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
+                                                <defs>
+                                                    <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+                                                        <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.3" />
+                                                        <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.0" />
+                                                    </linearGradient>
+                                                </defs>
+
+                                                {/* Grid lines */}
+                                                <line x1="0" y1={height} x2={width} y2={height} stroke="#e5e5e5" strokeWidth="1" />
+                                                <line x1="0" y1="0" x2={width} y2="0" stroke="#e5e5e5" strokeWidth="1" />
+                                                {/* 50% line */}
+                                                <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="#f0f0f0" strokeWidth="1" strokeDasharray="4 4" />
+
+                                                {/* Area Fill */}
+                                                <polygon points={fillPoints} fill="url(#chartGradient)" />
+
+                                                {/* Line */}
+                                                <polyline
+                                                    points={points}
+                                                    fill="none"
+                                                    stroke="var(--accent)"
+                                                    strokeWidth="3"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+
+                                                {/* Dots */}
+                                                {dataPoints.map((p, i) => {
+                                                    const x = dataPoints.length === 1
+                                                        ? width / 2
+                                                        : paddingX + (i * (effectiveWidth / (dataPoints.length - 1)));
+                                                    const y = height - paddingY - ((p.total / maxVal) * (height - (paddingY * 2)));
+
+                                                    return (
+                                                        <g key={i}>
+                                                            <circle cx={x} cy={y} r="4" fill="white" stroke="var(--accent)" strokeWidth="2" />
+                                                            {/* Optional: Show value on last point? */}
+                                                        </g>
+                                                    );
+                                                })}
+                                            </svg>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Timeline */}
