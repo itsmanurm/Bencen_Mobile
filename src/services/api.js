@@ -55,6 +55,25 @@ export const api = {
         }
     },
 
+    getActiveItemIds: async (licitacionId) => {
+        try {
+            // Fetch distinct item_ids that have progress
+            const { data, error } = await supabase
+                .from('partes_diarios')
+                .select('item_id')
+                .eq('id_licitacion', licitacionId);
+
+            if (error) throw error;
+
+            // Return unique IDs
+            const ids = new Set(data.map(d => d.item_id));
+            return ids;
+        } catch (error) {
+            console.error('Error fetching active items:', error);
+            return new Set();
+        }
+    },
+
     saveProgress: async (payload) => {
         // payload: { item_id, id_licitacion, avance, fecha, observaciones }
         const { item_id, id_licitacion, avance, fecha, observaciones } = payload;

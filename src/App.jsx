@@ -5,7 +5,7 @@ import { ItemsList } from './components/ItemsList';
 import { Login } from './components/Login';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Loader2, LogOut } from 'lucide-react';
-import { ActionSelector } from './components/ActionSelector';
+
 
 function App() {
   const [session, setSession] = useState(null);
@@ -13,7 +13,6 @@ function App() {
   const [userName, setUserName] = useState(null); // NEW: Store User Name
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [actionMode, setActionMode] = useState(null); // 'add' | 'history'
 
   useEffect(() => {
     // 1. Check active session
@@ -30,7 +29,7 @@ function App() {
         setUserRole(null);
         setUserName(null);
         setSelectedProject(null);
-        setActionMode(null);
+
         setLoading(false);
       }
     });
@@ -100,25 +99,12 @@ function App() {
 
   // 4. Engineer -> Project Selection / Items
   const renderEngineerContent = () => {
-    if (actionMode) {
+    if (selectedProject) {
       return (
         <ItemsList
           project={selectedProject}
-          mode={actionMode}
-          onBack={() => setActionMode(null)}
+          onBack={() => setSelectedProject(null)}
         />
-      );
-    }
-
-    if (selectedProject) {
-      return (
-        <div className="p-4 pt-8">
-          <ActionSelector
-            project={selectedProject}
-            onSelect={setActionMode}
-            onBack={() => setSelectedProject(null)}
-          />
-        </div>
       );
     }
 
