@@ -74,10 +74,11 @@ export function HistoryModal({ item, onClose, onAddProgress, onUpdate }) {
                             let runningTotal = 0;
                             // Add an initial point at 0 if there's history, to show the climb
                             const chartData = sortedHistory.length > 0 ? [
-                                { date: 'Inicio', value: 0, avance: 0, fullDate: '', obs: 'Inicio' },
-                                ...sortedHistory.map(h => {
+                                { xKey: 'start', date: 'Inicio', value: 0, avance: 0, fullDate: 'Inicio', obs: 'Inicio' },
+                                ...sortedHistory.map((h, index) => {
                                     runningTotal += h.avance;
                                     return {
+                                        xKey: h.id, // Use unique ID to prevent X-axis merging
                                         date: new Date(h.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }),
                                         fullDate: new Date(h.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }),
                                         value: runningTotal,
@@ -98,13 +99,13 @@ export function HistoryModal({ item, onClose, onAddProgress, onUpdate }) {
                             }
 
                             const totalProgress = runningTotal;
-                            const isComplete = totalProgress >= 100;
+                            const isComplete = totalProgress >= 99.9;
 
                             const CustomTooltip = ({ active, payload, label }) => {
                                 if (active && payload && payload.length) {
                                     return (
                                         <div className="bg-neutral-900 text-white text-xs rounded-lg p-2 shadow-xl border border-neutral-800">
-                                            <p className="font-bold mb-1">{payload[0].payload.fullDate || label}</p>
+                                            <p className="font-bold mb-1">{payload[0].payload.fullDate || payload[0].payload.date}</p>
                                             <p className="text-green-400 font-bold">Total: {payload[0].value.toFixed(2)}%</p>
                                             <p className="text-neutral-400">Avance: +{payload[0].payload.avance}%</p>
                                         </div>
@@ -125,7 +126,7 @@ export function HistoryModal({ item, onClose, onAddProgress, onUpdate }) {
                                     {/* Recharts Area Chart */}
                                     <div className="h-40 w-full -ml-2">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                                            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 10, bottom: 0 }}>
                                                 <defs>
                                                     <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
                                                         <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2} />
@@ -134,11 +135,18 @@ export function HistoryModal({ item, onClose, onAddProgress, onUpdate }) {
                                                 </defs>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                                                 <XAxis
-                                                    dataKey="date"
+                                                    dataKey="xKey"
                                                     axisLine={false}
                                                     tickLine={false}
                                                     tick={{ fontSize: 10, fill: '#a3a3a3' }}
                                                     interval="preserveStartEnd"
+                                                    tickFormatter={(val, index) => {
+                                                        // Fallback to finding object by ID if needed, but index usually aligns for category
+                                                        // Actually Recharts passes the value of dataKey
+                                                        // Let's find the item in chartData
+                                                        const item = chartData.find(d => d.xKey === val);
+                                                        return item ? item.date : '';
+                                                    }}
                                                 />
                                                 <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--accent)', strokeWidth: 1, strokeDasharray: '4 4' }} />
                                                 <Area

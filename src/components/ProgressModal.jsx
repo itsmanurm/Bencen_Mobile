@@ -5,6 +5,8 @@ import { api } from '../services/api';
 export function ProgressModal({ item, editingEntry = null, onClose, onSuccess }) {
     const [avance, setAvance] = useState(editingEntry ? editingEntry.avance : '');
     const [observaciones, setObservaciones] = useState(editingEntry ? editingEntry.observaciones : '');
+    const [fechaInicio, setFechaInicio] = useState(editingEntry?.fecha_inicio || '');
+    const [fechaFin, setFechaFin] = useState(editingEntry?.fecha_fin || '');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -23,6 +25,16 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
             return;
         }
 
+        if (!fechaInicio || !fechaFin) {
+            setError("Debes seleccionar Fecha Inicio y Fecha Fin.");
+            return;
+        }
+
+        if (fechaInicio > fechaFin) {
+            setError("La fecha de inicio no puede ser posterior a la fecha de fin.");
+            return;
+        }
+
         setLoading(true);
         try {
             if (editingEntry) {
@@ -30,8 +42,9 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
                 await api.updateProgress(editingEntry.id, {
                     avance: val,
                     observaciones,
-                    fecha: editingEntry.fecha // Keep original date or allow edit? Assuming keep simple for now or use current logic.
-                    // The API updateProgress expects fecha. Let's pass what we have.
+                    fecha: editingEntry.fecha, // Keep original report date
+                    fecha_inicio: fechaInicio,
+                    fecha_fin: fechaFin
                 });
             } else {
                 // Create
@@ -39,14 +52,16 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
                     item_id: item.id,
                     id_licitacion: item.id_licitacion,
                     avance: val,
-                    observaciones
+                    observaciones,
+                    fecha_inicio: fechaInicio,
+                    fecha_fin: fechaFin
                 });
             }
             onSuccess();
             onClose();
         } catch (err) {
             console.error(err);
-            setError(err.message || "Error al guardar. Verificá que la suma no supere el 100%.");
+            setError(err.message || "Error al guardar.");
             setLoading(false);
         }
     };
@@ -97,6 +112,33 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
                         <p className="text-xs text-neutral-500 mt-1.5 ml-1">
                             {editingEntry ? 'Modificá el porcentaje registrado.' : 'Ingresá el porcentaje ejecutado hoy (0 a 100).'}
                         </p>
+                    </div>
+
+                    {/* Periodo Inputs */}
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">Período del Avance <span className="text-red-500">*</span></label>
+                        <div className="flex gap-3">
+                            <div className="flex-1">
+                                <span className="text-xs text-gray-500 mb-1 block">Inicio</span>
+                                <input
+                                    type="date"
+                                    required
+                                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:border-[var(--accent)] focus:ring-[var(--accent)] outline-none"
+                                    value={fechaInicio}
+                                    onChange={e => setFechaInicio(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <span className="text-xs text-gray-500 mb-1 block">Fin</span>
+                                <input
+                                    type="date"
+                                    required
+                                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:border-[var(--accent)] focus:ring-[var(--accent)] outline-none"
+                                    value={fechaFin}
+                                    onChange={e => setFechaFin(e.target.value)}
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <div>

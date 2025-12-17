@@ -1,0 +1,83 @@
+import React, { useEffect, useState } from 'react';
+import { api } from '../../services/api';
+import { Clock, CheckCircle2, User, Loader2, ArrowRight } from 'lucide-react';
+
+export function NotificationFeed() {
+    const [activities, setActivities] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchActivity();
+        const interval = setInterval(fetchActivity, 60000); // Poll every minute
+        return () => clearInterval(interval);
+    }, []);
+
+    const fetchActivity = async () => {
+        const data = await api.getRecentActivity(15);
+        setActivities(data);
+        setLoading(false);
+    };
+
+    if (loading) return <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-orange-500" /></div>;
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-full flex flex-col">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-neutral-800 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-orange-500" />
+                    Actividad Reciente
+                </h3>
+                <span className="bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">En vivo</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-0">
+                {activities.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 text-sm">No hay actividad reciente.</div>
+                ) : (
+                    <div className="divide-y divide-gray-50">
+                        {activities.map((act) => (
+                            <div key={act.id} className="p-4 hover:bg-gray-50 transition-colors group">
+                                <div className="flex items-start gap-3">
+                                    <div className="mt-1">
+                                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-xs uppercase">
+                                            {act.mobile_users?.name?.substring(0, 2) || 'VN'}
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-start mb-0.5">
+                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                                                {act.project_name || 'Obra Desconocida'}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">
+                                                {new Date(act.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+
+                                        <p className="text-xs font-bold text-neutral-900 truncate">
+                                            {act.mobile_users?.name || act.mobile_users?.email}
+                                        </p>
+
+                                        <p className="text-sm text-neutral-600 mt-0.5 leading-snug">
+                                            Reportó <span className="font-bold text-green-600">{act.avance}%</span> en <span className="text-neutral-800 font-medium">"{act.item_detail.descripcion}"</span>
+                                        </p>
+
+                                        {act.observaciones && (
+                                            <p className="text-xs text-gray-400 italic mt-1 line-clamp-2 pl-2 border-l-2 border-gray-100">
+                                                "{act.observaciones}"
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+            <div className="p-3 border-t border-gray-100 bg-gray-50 text-center">
+                <button className="text-xs font-bold text-neutral-500 hover:text-orange-600 flex items-center justify-center gap-1 w-full">
+                    Ver todo el historial <ArrowRight className="w-3 h-3" />
+                </button>
+            </div>
+        </div>
+    );
+}
