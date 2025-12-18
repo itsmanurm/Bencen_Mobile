@@ -3,7 +3,7 @@ import { api } from '../../services/api';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Users, Building2, CalendarCheck, CheckCircle } from 'lucide-react';
 
-export function AdminMetrics({ projectId }) {
+export function AdminMetrics({ projectId, refreshTrigger }) {
     const [metrics, setMetrics] = useState(null);
     const [chartData, setChartData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -33,7 +33,7 @@ export function AdminMetrics({ projectId }) {
             else setFinancials({ totalScope: 0, totalExecuted: 0 });
             setLoading(false);
         });
-    }, [projectId, dateRange]);
+    }, [projectId, dateRange, refreshTrigger]);
 
     const setPreset = (days) => {
         const end = new Date();
@@ -51,9 +51,8 @@ export function AdminMetrics({ projectId }) {
     const globalPercent = financials.totalScope > 0 ? (financials.totalExecuted / financials.totalScope) * 100 : 0;
     const weeklyPercentOfTotal = financials.totalScope > 0 ? (weeklyMoneySum / financials.totalScope) * 100 : 0;
 
-    const formatMoney = (amount) => {
-        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
-    };
+    const formatPercentVal = (val) => `${Number(val).toFixed(2)}%`;
+    const formatPoints = (val) => `${Number(val).toLocaleString('es-AR')} pts`;
 
     const formatDateTick = (dateStr) => {
         if (!dateStr) return '';
@@ -62,6 +61,14 @@ export function AdminMetrics({ projectId }) {
     };
 
     if (loading) return <div className="h-64 bg-gray-100 rounded-xl animate-pulse"></div>;
+
+    // Prepare chart data: Convert money to % of total scope if project selected
+    const chartDataProcessed = chartData.map(d => {
+        if (hasProject && financials.totalScope > 0) {
+            return { ...d, displayValue: (d.money / financials.totalScope) * 100 };
+        }
+        return { ...d, displayValue: d.money || 0 }; // Fallback to raw points/money for global view (or hide)
+    });
 
     return (
         <div className="space-y-4">
@@ -104,7 +111,7 @@ export function AdminMetrics({ projectId }) {
                 {/* Weekly Activity Chart */}
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                        <h3 className="font-bold text-neutral-800 text-sm">Evolución de Producción</h3>
+                        <h3 className="font-bold text-neutral-800 text-sm">Producción Semanal (Impacto %)</h3>
                         <div className="flex flex-wrap items-center gap-2">
                             {/* Presets */}
                             <div className="flex bg-gray-100 rounded-lg p-1">
@@ -136,7 +143,7 @@ export function AdminMetrics({ projectId }) {
                     </div>
                     <div className="h-40 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={chartData}>
+                            <AreaChart data={chartDataProcessed}>
                                 <defs>
                                     <linearGradient id="colorReports" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
@@ -152,14 +159,30 @@ export function AdminMetrics({ projectId }) {
                                     minTickGap={30}
                                 />
                                 <Tooltip
-                                    labelFormatter={(val) => formatDateTick(val)}
-                                    formatter={(value) => formatMoney(value)}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                                     cursor={{ stroke: '#f97316', strokeWidth: 1 }}
+                                    content={({ active, payload, label }) => {
+                                        if (active && payload && payload.length) {
+                                            const data = payload[0].payload;
+                                            return (
+                                                <div className="bg-white p-3 border border-gray-200 shadow-lg rounded-xl z-50">
+                                                    <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">{formatDateTick(label)}</p>
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="text-lg font-black text-neutral-800">
+                                                            {hasProject ? formatPercentVal(data.displayValue) : formatPoints(data.displayValue)}
+                                                        </span>
+                                                        <span className="text-xs font-medium text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md w-fit">
+                                                            {data.parts} {data.parts === 1 ? 'Reporte' : 'Reportes'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
                                 />
                                 <Area
                                     type="monotone"
-                                    dataKey={hasProject || chartData.some(d => d.money > 0) ? "money" : "parts"}
+                                    dataKey="displayValue"
                                     stroke="#f97316"
                                     strokeWidth={2}
                                     fillOpacity={1}
@@ -174,10 +197,10 @@ export function AdminMetrics({ projectId }) {
                 <div className="bg-neutral-900 p-4 rounded-xl shadow-sm border border-neutral-800 text-white flex flex-col justify-between relative overflow-hidden">
                     <div className="relative z-10">
                         <h3 className="font-bold text-lg mb-1">
-                            {hasProject ? "Avance Financiero Global" : "Volumen Semanal"}
+                            {hasProject ? "Avance Global" : "Volumen Semanal"}
                         </h3>
                         <p className="text-neutral-400 text-sm mb-6">
-                            {hasProject ? "Porcentaje total sobre presupuesto" : "Avance acumulado (últimos 7 días)"}
+                            {hasProject ? "Porcentaje ponderado del proyecto" : "Puntos de actividad acumulados"}
                         </p>
 
                         <div className="flex items-end gap-3 flex-wrap">
@@ -194,25 +217,14 @@ export function AdminMetrics({ projectId }) {
                             ) : (
                                 <>
                                     <span className="text-4xl xl:text-5xl font-black text-white truncate">
-                                        {weeklyMoneySum > 0 ? formatMoney(weeklyMoneySum) : `${weeklyProgressSum.toFixed(2)} pts`}
+                                        {formatPoints(weeklyMoneySum)}
                                     </span>
-                                    {weeklyMoneySum > 0 && <span className="text-xs text-neutral-500 w-full">* Prod. Est. Semanal</span>}
+                                    <span className="text-xs text-neutral-500 w-full">* Indicador de Actividad Ponderada</span>
                                 </>
                             )}
                         </div>
 
-                        {hasProject && financials.totalScope > 0 && (
-                            <div className="mt-4 pt-4 border-t border-neutral-800 grid grid-cols-2 gap-4">
-                                <div>
-                                    <span className="text-xs text-neutral-500 block uppercase tracking-wider">Ejecutado</span>
-                                    <span className="text-sm font-semibold text-white block">{formatMoney(financials.totalExecuted)}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs text-neutral-500 block uppercase tracking-wider">Total Obra</span>
-                                    <span className="text-sm font-semibold text-white block">{formatMoney(financials.totalScope)}</span>
-                                </div>
-                            </div>
-                        )}
+                        {/* Hidden Financial Details as requested */}
                     </div>
                     {/* Decorative bg */}
                     <div className="absolute -right-10 -bottom-10 opacity-10">

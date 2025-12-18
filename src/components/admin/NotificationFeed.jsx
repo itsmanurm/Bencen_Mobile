@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { Clock, CheckCircle2, User, Loader2, ArrowRight } from 'lucide-react';
 
-export function NotificationFeed() {
+export function NotificationFeed({ refreshTrigger }) {
     const [activities, setActivities] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -10,7 +10,7 @@ export function NotificationFeed() {
         fetchActivity();
         const interval = setInterval(fetchActivity, 60000); // Poll every minute
         return () => clearInterval(interval);
-    }, []);
+    }, [refreshTrigger]);
 
     const fetchActivity = async () => {
         const data = await api.getRecentActivity(15);

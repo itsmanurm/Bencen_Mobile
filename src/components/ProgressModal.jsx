@@ -1,14 +1,50 @@
 import React, { useState } from 'react';
-import { X, Save, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Save, Loader2, AlertTriangle, Camera, Trash2, Image as ImageIcon } from 'lucide-react';
 import { api } from '../services/api';
+import imageCompression from 'browser-image-compression';
 
 export function ProgressModal({ item, editingEntry = null, onClose, onSuccess }) {
     const [avance, setAvance] = useState(editingEntry ? editingEntry.avance : '');
     const [observaciones, setObservaciones] = useState(editingEntry ? editingEntry.observaciones : '');
     const [fechaInicio, setFechaInicio] = useState(editingEntry?.fecha_inicio || '');
     const [fechaFin, setFechaFin] = useState(editingEntry?.fecha_fin || '');
+    const [photos, setPhotos] = useState(editingEntry?.photos || []);
     const [loading, setLoading] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
     const [error, setError] = useState(null);
+
+    const handleImageSelect = async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        setUploadingImage(true);
+        try {
+            const newPhotos = [];
+            for (const file of files) {
+                // Compression
+                const options = {
+                    maxSizeMB: 0.8,
+                    maxWidthOrHeight: 1280,
+                    useWebWorker: true
+                };
+                const compressedFile = await imageCompression(file, options);
+
+                // Upload
+                const url = await api.uploadImage(compressedFile);
+                newPhotos.push(url);
+            }
+            setPhotos(prev => [...prev, ...newPhotos]);
+        } catch (error) {
+            console.error(error);
+            alert("Error al subir imagen: " + error.message);
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
+    const removePhoto = (index) => {
+        setPhotos(prev => prev.filter((_, i) => i !== index));
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -44,7 +80,8 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
                     observaciones,
                     fecha: editingEntry.fecha, // Keep original report date
                     fecha_inicio: fechaInicio,
-                    fecha_fin: fechaFin
+                    fecha_fin: fechaFin,
+                    photos
                 });
             } else {
                 // Create
@@ -54,7 +91,8 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
                     avance: val,
                     observaciones,
                     fecha_inicio: fechaInicio,
-                    fecha_fin: fechaFin
+                    fecha_fin: fechaFin,
+                    photos
                 });
             }
             onSuccess();
@@ -152,6 +190,32 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
                         />
                     </div>
 
+                    {/* Photos Section */}
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-2">Evidencia Fotográfica</label>
+                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                            {/* Add Button */}
+                            <label className={`shrink-0 w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[var(--accent)] hover:bg-orange-50 transition-colors ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                {uploadingImage ? <Loader2 className="w-6 h-6 animate-spin text-gray-400" /> : <Camera className="w-6 h-6 text-gray-400" />}
+                                <span className="text-[10px] font-bold text-gray-500">{uploadingImage ? '...' : 'Agregar'}</span>
+                                <input type="file" accept="image/*" multiple onChange={handleImageSelect} className="hidden" />
+                            </label>
+
+                            {photos.map((url, index) => (
+                                <div key={index} className="relative shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
+                                    <img src={url} alt="evidencia" className="w-full h-full object-cover" />
+                                    <button
+                                        type="button"
+                                        onClick={() => removePhoto(index)}
+                                        className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-600 rounded-full text-white transition-colors opacity-0 group-hover:opacity-100"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     {error && (
                         <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl flex items-start gap-2">
                             <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -161,7 +225,7 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
 
                     <button
                         type="submit"
-                        disabled={loading}
+                        disabled={loading || uploadingImage}
                         className="w-full h-12 bg-[var(--accent)] hover:bg-orange-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 disabled:opacity-70 transition-all active:scale-[0.98]"
                     >
                         {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}

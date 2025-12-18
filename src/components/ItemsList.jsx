@@ -136,9 +136,9 @@ export function ItemsList({ project, onBack }) {
         setViewingHistoryItem(item);
     };
 
-    const refreshActiveIds = () => {
+    const refreshProgress = () => {
         if (project?.id_licitacion) {
-            api.getActiveItemIds(project.id_licitacion).then(ids => setActiveIds(new Set(ids)));
+            api.getActiveItemIds(project.id_licitacion).then(progressData => setProgressMap(progressData));
         }
     };
 
@@ -255,15 +255,11 @@ export function ItemsList({ project, onBack }) {
                 })}
             </div>
 
-            {/* ... */}
-
-
-
             {viewingHistoryItem && (
                 <HistoryModal
                     item={viewingHistoryItem}
                     onClose={() => setViewingHistoryItem(null)}
-                    onUpdate={refreshActiveIds}
+                    onUpdate={refreshProgress}
                 />
             )}
         </div>

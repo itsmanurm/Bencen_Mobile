@@ -1,32 +1,59 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { api } from '../services/api';
-import { Users, Shield, Plus, X, Loader2, LogOut, Search, UserPlus, CheckCircle2, Bell, BarChart2 } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+import { Users, Shield, Plus, X, Loader2, LogOut, Search, UserPlus, CheckCircle2, Bell, BarChart2, Briefcase } from 'lucide-react';
 import { AdminMetrics } from './admin/AdminMetrics';
 import { NotificationFeed } from './admin/NotificationFeed';
 import { ProjectDetailDashboard } from './admin/ProjectDetailDashboard';
+import { RoleManager } from './admin/RoleManager';
 
 export function AdminDashboard({ onLogout }) {
     const [showUserList, setShowUserList] = useState(false);
     const [showCreateUser, setShowCreateUser] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [showDetailed, setShowDetailed] = useState(false);
-
+    const [refreshTrigger, setRefreshTrigger] = useState(0); // For forcing updates
     // Project Filtering
     const [projects, setProjects] = useState([]);
-    const [selectedProject, setSelectedProject] = useState(''); // '' means All
+
+    // Persistence: Initialize from localStorage
+    const [selectedProject, setSelectedProject] = useState(() => localStorage.getItem('bencen_admin_project') || '');
+    const [showDetailed, setShowDetailed] = useState(() => localStorage.getItem('bencen_admin_showDetailed') === 'true');
+    const [showRoles, setShowRoles] = useState(false);
+
+    // Persistence: Save to localStorage
+    useEffect(() => {
+        localStorage.setItem('bencen_admin_project', selectedProject);
+    }, [selectedProject]);
+
+    useEffect(() => {
+        localStorage.setItem('bencen_admin_showDetailed', String(showDetailed));
+    }, [showDetailed]);
 
     useEffect(() => {
         // Load projects for filter
-        api.getLicitaciones().then(data => setProjects(data));
+        api.getLicitaciones().then(data => {
+            setProjects(data);
+            if (data && data.length > 0) {
+                // Validate if stored selection exists in list
+                const storedId = localStorage.getItem('bencen_admin_project');
+                const isValid = data.some(p => p.id_licitacion === storedId);
+
+                if (!isValid) {
+                    setSelectedProject(data[0].id_licitacion);
+                }
+            }
+        });
     }, []);
+
+    const handleDetailBack = () => setShowDetailed(false);
 
     // Render Detailed Dashboard View
     if (showDetailed && selectedProject) {
         return (
             <ProjectDetailDashboard
                 projectId={selectedProject}
-                onBack={() => setShowDetailed(false)}
+                onBack={handleDetailBack}
             />
         );
     }
@@ -50,7 +77,6 @@ export function AdminDashboard({ onLogout }) {
                         onChange={(e) => setSelectedProject(e.target.value)}
                         className="bg-transparent text-sm text-white font-medium focus:outline-none min-w-[200px]"
                     >
-                        <option value="" className="text-black">Todas las Obras</option>
                         {projects.map(p => (
                             <option key={p.id_licitacion} value={p.id_licitacion} className="text-black">
                                 {p.nombre_abreviado}
@@ -75,7 +101,7 @@ export function AdminDashboard({ onLogout }) {
                         {showNotifications && (
                             <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                                 <div className="h-[500px]">
-                                    <NotificationFeed />
+                                    <NotificationFeed refreshTrigger={refreshTrigger} />
                                 </div>
                             </div>
                         )}
@@ -89,23 +115,30 @@ export function AdminDashboard({ onLogout }) {
             </div>
 
             {/* Main Content Area - Full Width */}
-            <div className="flex-1 p-4 max-w-7xl w-full mx-auto space-y-4">
+            <div className="flex-1 p-4 md:p-6 w-full mx-auto space-y-6">
 
                 {/* Action Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <ActionCard
                         icon={Users}
-                        title="Gestionar Ingenieros"
-                        desc="Ver lista, permisos y roles"
+                        title="Gestionar Usuarios"
+                        desc="Ver lista, roles y permisos"
                         onClick={() => setShowUserList(true)}
                         color="bg-blue-600"
                     />
                     <ActionCard
                         icon={UserPlus}
-                        title="Alta de Ingeniero"
-                        desc="Crear nuevo acceso"
+                        title="Alta de Usuario"
+                        desc="Crear nuevo admin o ingeniero"
                         onClick={() => setShowCreateUser(true)}
                         color="bg-purple-600"
+                    />
+                    <ActionCard
+                        icon={Briefcase}
+                        title="Gestionar Roles"
+                        desc="Definir perfiles dinámicos"
+                        onClick={() => setShowRoles(true)}
+                        color="bg-orange-600"
                     />
                 </div>
 
@@ -123,7 +156,7 @@ export function AdminDashboard({ onLogout }) {
                 </div>
 
                 {/* Dashboard Metrics - Filtered */}
-                <AdminMetrics projectId={selectedProject} />
+                <AdminMetrics projectId={selectedProject} refreshTrigger={refreshTrigger} />
 
                 {/* Detailed Metrics Button */}
                 {selectedProject && (
@@ -140,6 +173,7 @@ export function AdminDashboard({ onLogout }) {
             {/* Modals */}
             {showUserList && <UserListModal onClose={() => setShowUserList(false)} />}
             {showCreateUser && <CreateUserModal onClose={() => setShowCreateUser(false)} />}
+            {showRoles && <RoleManager onClose={() => setShowRoles(false)} />}
         </div>
     );
 }
@@ -167,23 +201,59 @@ function CreateUserModal({ onClose }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
+    const [role, setRole] = useState('engineer');
     const [loading, setLoading] = useState(false);
+    const [availableRoles, setAvailableRoles] = useState([]);
+
+    useEffect(() => {
+        api.getRoles().then(data => setAvailableRoles(data || []));
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
-            const { data, error } = await supabase.rpc('create_user_via_admin', {
-                _email: email,
-                _password: password,
-                _name: name
+            // Use temporary client to not mess with Admin session
+            const tempSupabase = createClient(
+                import.meta.env.VITE_SUPABASE_URL,
+                import.meta.env.VITE_SUPABASE_ANON_KEY,
+                { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
+            );
+
+            const { data, error } = await tempSupabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: { full_name: name, role: role } // Use Role State
+                }
             });
 
             if (error) throw error;
-            if (data?.startsWith('Error:')) alert(data);
-            else {
-                alert("Usuario creado correctamente!");
-                onClose();
+
+            if (data?.user) {
+                // Manually create profile in mobile_users using the ADMIN client (supabase)
+                const { error: profileError } = await supabase
+                    .from('mobile_users')
+                    .insert([{
+                        id: data.user.id,
+                        email: email,
+                        name: name,
+                        role: role // Use Role State
+                    }]);
+
+                if (profileError) {
+                    console.error("Profile Error:", profileError);
+                    // Check if it's a duplicate or constraint error
+                    if (profileError.code === '23505') { // Unique violation
+                        alert("El usuario Auth se creó, pero el perfil ya existía.");
+                        onClose();
+                    } else {
+                        alert("Se creó el login pero falló el perfil: " + profileError.message);
+                    }
+                } else {
+                    alert("Usuario creado correctamente!");
+                    onClose();
+                }
             }
         } catch (err) {
             console.error(err);
@@ -197,10 +267,47 @@ function CreateUserModal({ onClose }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold text-xl text-neutral-900">Alta de Ingeniero</h3>
+                    <h3 className="font-bold text-xl text-neutral-900">Alta de Usuario</h3>
                     <button onClick={onClose}><X className="w-6 h-6 text-neutral-400 hover:text-neutral-800" /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
+
+                    {/* Role Selector */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Rol del Usuario</label>
+                        {availableRoles.length > 0 ? (
+                            <div className="grid grid-cols-2 gap-3">
+                                {availableRoles.map(r => (
+                                    <button
+                                        key={r.name}
+                                        type="button"
+                                        onClick={() => setRole(r.name)}
+                                        className={`h-10 rounded-lg border text-sm font-bold transition-all capitalize ${role === r.name ? 'bg-orange-50 border-orange-500 text-orange-700 ring-1 ring-orange-500 shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                    >
+                                        {r.name}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setRole('engineer')}
+                                    className={`h-10 rounded-lg border text-sm font-bold transition-all ${role === 'engineer' ? 'bg-orange-50 border-orange-500 text-orange-700 ring-1 ring-orange-500 shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                >
+                                    Ingeniero
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setRole('admin')}
+                                    className={`h-10 rounded-lg border text-sm font-bold transition-all ${role === 'admin' ? 'bg-purple-50 border-purple-500 text-purple-700 ring-1 ring-purple-500 shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                >
+                                    Admin
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
                     <input type="text" placeholder="Nombre Completo" value={name} onChange={e => setName(e.target.value)} required className="w-full h-12 px-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 outline-none transition-all" />
                     <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full h-12 px-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 outline-none transition-all" />
                     <input type="text" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} required className="w-full h-12 px-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 outline-none transition-all" />
@@ -218,15 +325,37 @@ function UserListModal({ onClose }) {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedUser, setSelectedUser] = useState(null);
+    const [availableRoles, setAvailableRoles] = useState([]);
 
     useEffect(() => {
         fetchUsers();
+        api.getRoles().then(data => setAvailableRoles(data || []));
     }, []);
 
     const fetchUsers = async () => {
         const { data } = await supabase.from('mobile_users').select('*').order('name');
         setUsers(data || []);
         setLoading(false);
+    };
+
+    // ... inside UserListModal component ...
+    const changeRole = async (userId, newRole) => {
+        // Confirmation is optional but safe
+        // if (!window.confirm(`¿Cambiar rol a ${newRole}?`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('mobile_users')
+                .update({ role: newRole })
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+        } catch (err) {
+            console.error(err);
+            alert("Error al actualizar rol: " + err.message);
+        }
     };
 
     return (
@@ -247,13 +376,32 @@ function UserListModal({ onClose }) {
                                     <div>
                                         <p className="font-bold text-neutral-900">{u.name}</p>
                                         <p className="text-sm text-neutral-500">{u.email}</p>
-                                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full mt-1 inline-block ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>{u.role}</span>
                                     </div>
-                                    {u.role !== 'admin' && (
-                                        <button onClick={() => setSelectedUser(u)} className="px-4 py-2 bg-white border border-gray-200 shadow-sm rounded-lg text-sm font-bold text-neutral-700 hover:bg-gray-50">
-                                            Permisos
-                                        </button>
-                                    )}
+                                    <div className="flex items-center gap-3">
+                                        {/* Role Selector */}
+                                        <select
+                                            value={u.role}
+                                            onChange={(e) => changeRole(u.id, e.target.value)}
+                                            className={`text-xs uppercase font-bold px-3 py-1.5 rounded-lg border outline-none cursor-pointer appearance-none text-center min-w-[90px] ${u.role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'}`}
+                                        >
+                                            {availableRoles.length > 0 ? (
+                                                availableRoles.map(r => (
+                                                    <option key={r.name} value={r.name}>{r.name}</option>
+                                                ))
+                                            ) : (
+                                                <>
+                                                    <option value="engineer">Ingeniero</option>
+                                                    <option value="admin">Admin</option>
+                                                </>
+                                            )}
+                                        </select>
+
+                                        {u.role !== 'admin' && (
+                                            <button onClick={() => setSelectedUser(u)} className="px-4 py-1.5 bg-white border border-gray-200 shadow-sm rounded-lg text-xs font-bold text-neutral-700 hover:bg-gray-50 h-8">
+                                                Permisos
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>

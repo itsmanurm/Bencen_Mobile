@@ -22,14 +22,6 @@ export const api = {
     getItemHistory: async (itemId) => {
         try {
             // Fetch history with user details
-            // We assume there is a foreign key relation between partes_diarios.user_id and mobile_users.id
-            // If not, we might fail. But usually Supabase detects it if we named it user_id and both are in public.
-            // Let's try explicit join or just fetch and then map if needed.
-
-            // Checking database_setup.sql, we have user_id uuid references auth.users.
-            // mobile_users is also references auth.users.
-            // So we can join mobile_users on mobile_users.id = partes_diarios.user_id
-
             const { data, error } = await supabase
                 .from('partes_diarios')
                 .select(`
@@ -38,6 +30,9 @@ export const api = {
                     fecha,
                     observaciones,
                     created_at,
+                    photos,
+                    fecha_inicio,
+                    fecha_fin,
                     mobile_users (
                         name,
                         email
@@ -96,9 +91,31 @@ export const api = {
         return count > 0;
     },
 
+    uploadImage: async (file, folder = 'uploads') => {
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `${folder}/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('report-evidence')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage
+                .from('report-evidence')
+                .getPublicUrl(filePath);
+
+            return data.publicUrl;
+        } catch (error) {
+            console.error('Error uploading image:', error);
+            throw error;
+        }
+    },
+
     saveProgress: async (payload) => {
-        // payload: { item_id, id_licitacion, avance, fecha, observaciones, fecha_inicio, fecha_fin }
-        const { item_id, id_licitacion, avance, fecha, observaciones, fecha_inicio, fecha_fin } = payload;
+        const { item_id, id_licitacion, avance, fecha, observaciones, fecha_inicio, fecha_fin, photos } = payload;
 
         // Validate basics
         if (!item_id || avance === undefined) throw new Error("Faltan datos obligatorios");
@@ -120,7 +137,8 @@ export const api = {
                     fecha: fecha || new Date().toISOString().split('T')[0],
                     observaciones,
                     fecha_inicio,
-                    fecha_fin
+                    fecha_fin,
+                    photos: photos || []
                 }])
                 .select();
 
@@ -153,7 +171,8 @@ export const api = {
                     observaciones: payload.observaciones,
                     fecha: payload.fecha,
                     fecha_inicio: payload.fecha_inicio,
-                    fecha_fin: payload.fecha_fin
+                    fecha_fin: payload.fecha_fin,
+                    photos: payload.photos
                 })
                 .eq('id', id)
                 .select();
@@ -230,7 +249,31 @@ export const api = {
         }
     },
 
+    // --- Role Management ---
+    getRoles: async () => {
+        try {
+            const { data, error } = await supabase.from('roles').select('*').order('name');
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error fetching roles:', error);
+            return [];
+        }
+    },
+
+    createRole: async (name, description) => {
+        try {
+            const { data, error } = await supabase.from('roles').insert([{ name, description }]).select();
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error creating role:', error);
+            throw error;
+        }
+    },
+
     // --- Admin Dashboard APIs ---
+
 
     getRecentActivity: async (limit = 20) => {
         try {
@@ -416,11 +459,11 @@ export const api = {
                 end = now.toISOString().split('T')[0];
             }
 
-            // 1. Fetch Parts in Range
+            // 1. Fetch Parts in Range (Using FECHA_FIN as requested)
             let query = supabase
                 .from('partes_diarios')
                 .select(`
-                    id, avance, fecha, created_at, item_id, id_licitacion
+                    id, avance, fecha, fecha_fin, created_at, item_id, id_licitacion
                 `)
                 .gte('fecha', start)
                 .lte('fecha', end)
@@ -499,7 +542,7 @@ export const api = {
             // 3. Aggregate by Date
             const grouped = {};
             parts.forEach(part => {
-                const dateKey = part.fecha; // YYYY-MM-DD
+                const dateKey = part.fecha_fin || part.fecha;
                 if (!grouped[dateKey]) grouped[dateKey] = { date: dateKey, parts: 0, money: 0 };
 
                 grouped[dateKey].parts += 1;
@@ -597,6 +640,177 @@ export const api = {
         } catch (e) {
             console.error("Error getting project financials:", e);
             return { totalScope: 0, totalExecuted: 0 };
+        }
+    },
+
+    getProjectDetails: async (licitacionId) => {
+        try {
+            // 1. Fetch Plan Structure (All rows including Groups/Subgroups)
+            const { data: plan, error: planError } = await supabase
+                .from('datos_licitaciones_plan_trabajo')
+                .select('id, item, grupo, subgrupo, descripcion, unidad, cantidad, pu_mod_mo, pu_mod_mat, pu_mod_eq, orden')
+                .eq('id_licitacion', licitacionId)
+                .order('orden', { ascending: true }); // Crucial for structure
+
+            if (planError) throw planError;
+
+            // 2. Fetch Progress
+            const { data: reports, error: reportsError } = await supabase
+                .from('partes_diarios')
+                .select('item_id, avance, fecha, created_at, id, observaciones, mobile_users(name)')
+                .eq('id_licitacion', licitacionId)
+                .order('created_at', { ascending: false });
+
+            if (reportsError) throw reportsError;
+
+            const progressMap = new Map();
+            reports?.forEach(report => {
+                const current = progressMap.get(String(report.item_id)) || 0;
+                progressMap.set(String(report.item_id), current + (report.avance || 0));
+            });
+
+            // 3. Build Tree & Aggregate Data
+            const groups = []; // Root groups
+            const flatItems = []; // All items flat
+            const nearCompletion = []; // 90-99%
+
+            let currentGroup = null;
+            let currentSubgroup = null;
+
+            // Helper to calc money
+            const getMoney = (item) => ((item.pu_mod_mo || 0) + (item.pu_mod_mat || 0) + (item.pu_mod_eq || 0)) * (item.cantidad || 0);
+
+            plan.forEach(row => {
+                // If GROUP header
+                if (row.grupo) {
+                    currentGroup = {
+                        ...row,
+                        totalMoney: 0,
+                        executedMoney: 0,
+                        itemCount: 0,
+                        completedCount: 0,
+                        subgroups: [],
+                        directItems: []
+                    };
+                    groups.push(currentGroup);
+                    currentSubgroup = null;
+                }
+                // If SUBGROUP header
+                else if (row.subgrupo) {
+                    currentSubgroup = {
+                        ...row,
+                        totalMoney: 0,
+                        executedMoney: 0,
+                        itemCount: 0,
+                        completedCount: 0,
+                        items: []
+                    };
+                    if (currentGroup) currentGroup.subgroups.push(currentSubgroup);
+                }
+                // Actual ITEM
+                else {
+                    const rawAvance = progressMap.get(String(row.id)) || 0;
+                    const totalAvance = Math.min(rawAvance, 100);
+                    const totalMoney = getMoney(row);
+                    const executedMoney = totalMoney * (totalAvance / 100);
+
+                    const processedItem = {
+                        ...row,
+                        avance: totalAvance,
+                        weight: totalMoney,
+                        rubro: currentGroup?.descripcion || 'General',
+                        subrubro: currentSubgroup?.descripcion || ''
+                    };
+
+                    flatItems.push(processedItem);
+
+                    if (totalAvance >= 90 && totalAvance < 100) nearCompletion.push(processedItem);
+
+                    // Aggregate to Subgroup
+                    if (currentSubgroup) {
+                        currentSubgroup.totalMoney += totalMoney;
+                        currentSubgroup.executedMoney += executedMoney;
+                        currentSubgroup.itemCount += 1;
+                        if (totalAvance >= 99.9) currentSubgroup.completedCount += 1;
+                        currentSubgroup.items.push(processedItem);
+                    }
+
+                    // Aggregate to Group
+                    if (currentGroup) {
+                        currentGroup.totalMoney += totalMoney;
+                        currentGroup.executedMoney += executedMoney;
+                        currentGroup.itemCount += 1;
+                        if (totalAvance >= 99.9) currentGroup.completedCount += 1;
+                        // If no subgroup, add to directItems
+                        if (!currentSubgroup) currentGroup.directItems.push(processedItem);
+                    }
+                }
+            });
+
+            // 4. Finalize Groups List for Charts (Top Groups)
+            const groupList = groups.map(g => ({
+                name: g.descripcion,
+                totalMoney: g.totalMoney,
+                executedMoney: g.executedMoney,
+                progress: g.totalMoney > 0 ? (g.executedMoney / g.totalMoney) * 100 : 0,
+                itemCount: g.itemCount,
+                completedCount: g.completedCount
+            })).sort((a, b) => b.progress - a.progress);
+
+            // 5. Calculate Weekly Top Groups (Last 7 Days)
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+            const weekIso = oneWeekAgo.toISOString();
+
+            const weeklyReports = reports?.filter(r => r.created_at >= weekIso) || [];
+            const weeklyGroupMap = {};
+
+            weeklyReports.forEach(r => {
+                const item = flatItems.find(i => String(i.id) === String(r.item_id));
+                if (item) {
+                    // Calculate executed money contribution of this report
+                    // Report Avance is raw %. 
+                    // Contribution = (ReportAvance / 100) * ItemTotalMoney
+                    const contribution = (item.weight || 0) * ((r.avance || 0) / 100);
+                    const gName = item.rubro || 'General';
+                    if (!weeklyGroupMap[gName]) weeklyGroupMap[gName] = 0;
+                    weeklyGroupMap[gName] += contribution;
+                }
+            });
+
+            const weeklyTopGroups = Object.keys(weeklyGroupMap).map(name => {
+                const fullGroup = groupList.find(g => g.name === name);
+                return {
+                    name,
+                    weeklyValue: weeklyGroupMap[name],
+                    totalProgress: fullGroup ? fullGroup.progress : 0
+                };
+            }).sort((a, b) => b.weeklyValue - a.weeklyValue).slice(0, 4);
+
+            // 6. Prepare Feed
+            const feedWithNames = reports?.slice(0, 50).map(f => {
+                const item = flatItems.find(p => String(p.id) === String(f.item_id));
+                return {
+                    ...f,
+                    title: item ? `${item.rubro} - ${item.item}` : 'Item Desconocido',
+                    description: item?.descripcion,
+                    itemName: item?.item || 'Item desconocido',
+                    rubro: item?.rubro || 'General'
+                };
+            });
+
+            return {
+                groups: groupList,
+                weeklyTopGroups,
+                items: flatItems,
+                tree: groups,
+                nearCompletion: nearCompletion,
+                feed: feedWithNames || []
+            };
+
+        } catch (error) {
+            console.error('Error in getProjectDetails:', error);
+            return null;
         }
     }
 };

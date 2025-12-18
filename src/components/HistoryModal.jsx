@@ -10,6 +10,7 @@ export function HistoryModal({ item, onClose, onAddProgress, onUpdate }) {
     const [editingEntry, setEditingEntry] = useState(null);
     const [isAdding, setIsAdding] = useState(false);
     const [deletingEntry, setDeletingEntry] = useState(null);
+    const [viewingImage, setViewingImage] = useState(null);
 
     useEffect(() => {
         loadHistory();
@@ -205,6 +206,21 @@ export function HistoryModal({ item, onClose, onAddProgress, onUpdate }) {
                                             "{entry.observaciones}"
                                         </p>
 
+                                        {/* Photos */}
+                                        {entry.photos && entry.photos.length > 0 && (
+                                            <div className="flex gap-2 mb-2 overflow-x-auto pb-1 scrollbar-hide">
+                                                {entry.photos.map((url, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => setViewingImage(url)}
+                                                        className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-gray-200 hover:border-orange-400 transition-colors"
+                                                    >
+                                                        <img src={url} alt="evidencia" className="w-full h-full object-cover" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+
                                         <div className="flex items-center gap-1.5 text-xs text-neutral-400 border-t border-gray-100 pt-2">
                                             <User className="w-3.5 h-3.5" />
                                             {entry.mobile_users?.name || entry.mobile_users?.email || 'Usuario Desconocido'}
@@ -251,6 +267,24 @@ export function HistoryModal({ item, onClose, onAddProgress, onUpdate }) {
                                 Cancelar
                             </button>
                         </div>
+                    </div>
+                )}
+
+                {/* LIGHTBOX */}
+                {viewingImage && (
+                    <div
+                        className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+                        onClick={() => setViewingImage(null)}
+                    >
+                        <button className="absolute top-4 right-4 p-2 text-white/50 hover:text-white transition-colors">
+                            <X className="w-8 h-8" />
+                        </button>
+                        <img
+                            src={viewingImage}
+                            alt="Full size"
+                            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                            onClick={e => e.stopPropagation()}
+                        />
                     </div>
                 )}
             </div>

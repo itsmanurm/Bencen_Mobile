@@ -5,6 +5,7 @@ import { ItemsList } from './components/ItemsList';
 import { Login } from './components/Login';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Loader2, LogOut } from 'lucide-react';
+import logo from './assets/logo.png';
 
 
 function App() {
@@ -12,7 +13,25 @@ function App() {
   const [userRole, setUserRole] = useState(null); // 'admin', 'engineer', or null
   const [userName, setUserName] = useState(null); // NEW: Store User Name
   const [loading, setLoading] = useState(true);
-  const [selectedProject, setSelectedProject] = useState(null);
+
+  // Persistence for Engineer
+  const [selectedProject, setSelectedProject] = useState(() => {
+    try {
+      const saved = localStorage.getItem('bencen_engineer_project');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // Save selection
+  useEffect(() => {
+    if (selectedProject) {
+      localStorage.setItem('bencen_engineer_project', JSON.stringify(selectedProject));
+    } else {
+      localStorage.removeItem('bencen_engineer_project');
+    }
+  }, [selectedProject]);
 
   useEffect(() => {
     // 1. Check active session
@@ -29,6 +48,7 @@ function App() {
         setUserRole(null);
         setUserName(null);
         setSelectedProject(null);
+        localStorage.removeItem('bencen_engineer_project'); // Clear on logout/session end
 
         setLoading(false);
       }
@@ -58,6 +78,11 @@ function App() {
   };
 
   const handleLogout = async () => {
+    // Clear all persistence
+    localStorage.removeItem('bencen_engineer_project');
+    localStorage.removeItem('bencen_admin_project');
+    localStorage.removeItem('bencen_admin_showDetailed');
+
     await supabase.auth.signOut();
   };
 
@@ -114,8 +139,8 @@ function App() {
         <div className="bg-[var(--accent)] text-white shadow-lg sticky top-0 z-20">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                <span className="font-bold text-lg">B</span>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm overflow-hidden">
+                <img src={logo} alt="Bencen" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-lg md:text-xl font-bold tracking-tight leading-none">Bencen Mobile</h1>
