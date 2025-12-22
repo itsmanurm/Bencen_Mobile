@@ -224,36 +224,19 @@ function CreateUserModal({ onClose }) {
                 email,
                 password,
                 options: {
-                    data: { full_name: name, role: role } // Use Role State
+                    data: {
+                        name: name,
+                        role: (role === 'User' || role === 'Usuario') ? 'engineer' : role.toLowerCase(),
+                        app: 'mobile'
+                    }
                 }
             });
 
             if (error) throw error;
 
             if (data?.user) {
-                // Manually create profile in mobile_users using the ADMIN client (supabase)
-                const { error: profileError } = await supabase
-                    .from('mobile_users')
-                    .insert([{
-                        id: data.user.id,
-                        email: email,
-                        name: name,
-                        role: role // Use Role State
-                    }]);
-
-                if (profileError) {
-                    console.error("Profile Error:", profileError);
-                    // Check if it's a duplicate or constraint error
-                    if (profileError.code === '23505') { // Unique violation
-                        alert("El usuario Auth se creó, pero el perfil ya existía.");
-                        onClose();
-                    } else {
-                        alert("Se creó el login pero falló el perfil: " + profileError.message);
-                    }
-                } else {
-                    alert("Usuario creado correctamente!");
-                    onClose();
-                }
+                alert("Usuario creado correctamente!");
+                onClose();
             }
         } catch (err) {
             console.error(err);
@@ -381,6 +364,11 @@ function UserListModal({ onClose }) {
     };
 
     const deleteUser = async (user) => {
+        if (user.email === 'test.bencen.2025@gmail.com') {
+            alert("Este usuario es fundamental para pruebas y no puede ser eliminado.");
+            return;
+        }
+
         if (!window.confirm(`¿Estás seguro de ELIMINAR al usuario "${user.name}"?\nEsta acción es irreversible.`)) return;
 
         try {
