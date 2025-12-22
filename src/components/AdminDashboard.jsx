@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { api } from '../services/api';
 import { createClient } from '@supabase/supabase-js';
-import { Users, Shield, Plus, X, Loader2, LogOut, Search, UserPlus, CheckCircle2, Bell, BarChart2, Briefcase, Trash2 } from 'lucide-react';
+import { Users, Shield, Plus, X, Loader2, LogOut, Search, UserPlus, CheckCircle2, Bell, BarChart2, Briefcase, Trash2, Mail } from 'lucide-react';
 import { AdminMetrics } from './admin/AdminMetrics';
 import { NotificationFeed } from './admin/NotificationFeed';
 import { ProjectDetailDashboard } from './admin/ProjectDetailDashboard';
@@ -358,6 +358,28 @@ function UserListModal({ onClose }) {
         }
     };
 
+    const resendConfirmation = async (user) => {
+        if (!window.confirm(`¿Reenviar correo de confirmación a "${user.email}"?`)) return;
+
+        try {
+            // Use temporary client for auth operations if needed, or main client if allowed.
+            // auth.resend usually works from public client if rate limits allow
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email: user.email,
+                options: {
+                    emailRedirectTo: window.location.origin
+                }
+            });
+
+            if (error) throw error;
+            alert("Correo de confirmación reenviado exitosamente.");
+        } catch (err) {
+            console.error(err);
+            alert("Error al reenviar correo: " + err.message);
+        }
+    };
+
     const deleteUser = async (user) => {
         if (!window.confirm(`¿Estás seguro de ELIMINAR al usuario "${user.name}"?\nEsta acción es irreversible.`)) return;
 
@@ -419,6 +441,14 @@ function UserListModal({ onClose }) {
                                                 Permisos
                                             </button>
                                         )}
+
+                                        <button
+                                            onClick={() => resendConfirmation(u)}
+                                            className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                            title="Reenviar confirmación"
+                                        >
+                                            <Mail className="w-4 h-4" />
+                                        </button>
 
                                         <button
                                             onClick={() => deleteUser(u)}
