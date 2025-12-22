@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { api } from '../services/api';
 import { createClient } from '@supabase/supabase-js';
-import { Users, Shield, Plus, X, Loader2, LogOut, Search, UserPlus, CheckCircle2, Bell, BarChart2, Briefcase } from 'lucide-react';
+import { Users, Shield, Plus, X, Loader2, LogOut, Search, UserPlus, CheckCircle2, Bell, BarChart2, Briefcase, Trash2 } from 'lucide-react';
 import { AdminMetrics } from './admin/AdminMetrics';
 import { NotificationFeed } from './admin/NotificationFeed';
 import { ProjectDetailDashboard } from './admin/ProjectDetailDashboard';
@@ -358,6 +358,24 @@ function UserListModal({ onClose }) {
         }
     };
 
+    const deleteUser = async (user) => {
+        if (!window.confirm(`¿Estás seguro de ELIMINAR al usuario "${user.name}"?\nEsta acción es irreversible.`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('mobile_users')
+                .delete()
+                .eq('id', user.id);
+
+            if (error) throw error;
+
+            setUsers(users.filter(u => u.id !== user.id));
+        } catch (err) {
+            console.error(err);
+            alert("Error al eliminar usuario: " + err.message);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[600px] flex flex-col overflow-hidden">
@@ -401,6 +419,14 @@ function UserListModal({ onClose }) {
                                                 Permisos
                                             </button>
                                         )}
+
+                                        <button
+                                            onClick={() => deleteUser(u)}
+                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Eliminar usuario"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 </div>
                             ))}

@@ -7,6 +7,7 @@ import { HistoryModal } from './HistoryModal';
 export function ItemsList({ project, onBack }) {
     const [items, setItems] = useState([]);
     const [progressMap, setProgressMap] = useState(new Map());
+    const [scheduleMap, setScheduleMap] = useState(new Map());
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
     const [expandedGroups, setExpandedGroups] = useState({});
@@ -20,11 +21,13 @@ export function ItemsList({ project, onBack }) {
 
             Promise.all([
                 api.getItems(project.id_licitacion),
-                api.getActiveItemIds(project.id_licitacion)
+                api.getActiveItemIds(project.id_licitacion),
+                api.getItemSchedules(project.id_licitacion)
             ])
-                .then(([itemsData, progressData]) => {
+                .then(([itemsData, progressData, scheduleData]) => {
                     setItems(itemsData);
-                    setProgressMap(progressData); // Now it's a Map
+                    setProgressMap(progressData);
+                    setScheduleMap(scheduleData);
                     setLoading(false);
                 })
                 .catch(err => {
@@ -46,7 +49,12 @@ export function ItemsList({ project, onBack }) {
             const isComplete = progress >= 99.9; // Tolerance for float math
             const hasProgress = progress > 0;
 
-            const itemWithStatus = { ...row, hasProgress, isComplete, progress };
+            // Get Schedule Dates
+            const schedule = scheduleMap.get(String(row.id));
+            const fecha_inicio = schedule?.start || null;
+            const fecha_fin = schedule?.end || null;
+
+            const itemWithStatus = { ...row, hasProgress, isComplete, progress, fecha_inicio, fecha_fin };
 
             // Level 1: Group
             if (row.grupo) {
@@ -122,7 +130,7 @@ export function ItemsList({ project, onBack }) {
             return null;
         }).filter(Boolean);
 
-    }, [items, progressMap, searchTerm]);
+    }, [items, progressMap, scheduleMap, searchTerm]);
 
     const toggleGroup = (groupId) => {
         setExpandedGroups(prev => ({
@@ -139,6 +147,7 @@ export function ItemsList({ project, onBack }) {
     const refreshProgress = () => {
         if (project?.id_licitacion) {
             api.getActiveItemIds(project.id_licitacion).then(progressData => setProgressMap(progressData));
+            // Maybe refresh schedules too if needed, but rarely changes.
         }
     };
 

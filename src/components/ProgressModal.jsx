@@ -179,6 +179,18 @@ export function ProgressModal({ item, editingEntry = null, onClose, onSuccess })
                         </div>
                     </div>
 
+                    {/* Periodo Programado Info */}
+                    {(item.fecha_inicio || item.fecha_fin) && (
+                        <div className="mt-2 text-xs text-neutral-500 bg-gray-50 p-2 rounded-lg border border-gray-100 flex items-center gap-2">
+                            <span className="font-semibold text-neutral-700">Programado:</span>
+                            <span>
+                                {item.fecha_inicio ? new Date(item.fecha_inicio).toLocaleDateString('es-AR') : '...'}
+                                {' - '}
+                                {item.fecha_fin ? new Date(item.fecha_fin).toLocaleDateString('es-AR') : '...'}
+                            </span>
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-sm font-medium text-neutral-700 mb-1">Observaciones <span className="text-red-500">*</span></label>
                         <textarea

@@ -75,6 +75,64 @@ export const api = {
         }
     },
 
+    getItemSchedules: async (licitacionId) => {
+        try {
+            // 1. Fetch Periods (Ordered)
+            const { data: periods, error: pErr } = await supabase
+                .from('datos_licitaciones_periodos')
+                .select('id, fecha_desde, fecha_hasta')
+                .eq('id_licitacion', licitacionId)
+                .order('orden', { ascending: true });
+
+            if (pErr) throw pErr;
+            if (!periods || periods.length === 0) return new Map();
+
+            const periodMap = new Map(periods.map(p => [p.id, p]));
+
+            // 2. Fetch Advances (Planned > 0)
+            const { data: advances, error: aErr } = await supabase
+                .from('datos_licitaciones_avances')
+                .select('id_item, id_periodo, avance_estimado')
+                .eq('id_licitacion', licitacionId)
+                .gt('avance_estimado', 0); // Only where work is planned
+
+            if (aErr) throw aErr;
+
+            // 3. Calculate Item Ranges
+            const itemSchedules = new Map(); // itemId -> { start, end }
+
+            advances?.forEach(adv => {
+                const period = periodMap.get(adv.id_periodo);
+                if (!period) return;
+
+                const itemId = String(adv.id_item);
+                const current = itemSchedules.get(itemId);
+
+                if (!current) {
+                    itemSchedules.set(itemId, {
+                        start: period.fecha_desde,
+                        end: period.fecha_hasta
+                    });
+                } else {
+                    // Min Start
+                    if (new Date(period.fecha_desde) < new Date(current.start)) {
+                        current.start = period.fecha_desde;
+                    }
+                    // Max End
+                    if (new Date(period.fecha_hasta) > new Date(current.end)) {
+                        current.end = period.fecha_hasta;
+                    }
+                }
+            });
+
+            return itemSchedules;
+
+        } catch (error) {
+            console.error("Error calculating item schedules:", error);
+            return new Map();
+        }
+    },
+
     checkDateOverlap: async (itemId, start, end, excludeId = null) => {
         if (!start || !end) return false;
         let query = supabase.from('partes_diarios')
