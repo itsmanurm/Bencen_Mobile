@@ -61,21 +61,21 @@ export function AdminDashboard({ onLogout }) {
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-neutral-900">
             {/* Navbar */}
-            <div className="bg-neutral-900 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-20 shadow-md">
-                <div className="flex items-center gap-3">
+            <div className="bg-neutral-900 text-white px-3 py-3 md:px-6 md:py-4 flex justify-between items-center sticky top-0 z-20 shadow-md">
+                <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center">
                         <Shield className="w-5 h-5 text-white" />
                     </div>
-                    <span className="font-bold text-lg tracking-tight">Admin Dashboard</span>
+                    <span className="hidden sm:block font-bold text-lg tracking-tight">Admin Dashboard</span>
                 </div>
 
                 {/* Global Filter */}
-                <div className="hidden md:flex items-center gap-3 bg-neutral-800 rounded-lg px-3 py-1.5 border border-neutral-700">
-                    <Search className="w-4 h-4 text-neutral-400" />
+                <div className="flex-1 mx-2 md:mx-4 md:flex-none flex items-center gap-2 bg-neutral-800 rounded-lg px-2 py-1.5 border border-neutral-700 max-w-[200px] md:max-w-none">
+                    <Search className="w-4 h-4 text-neutral-400 flex-shrink-0" />
                     <select
                         value={selectedProject}
                         onChange={(e) => setSelectedProject(e.target.value)}
-                        className="bg-transparent text-sm text-white font-medium focus:outline-none min-w-[200px]"
+                        className="bg-transparent text-sm text-white font-medium focus:outline-none w-full md:w-auto md:min-w-[200px] truncate"
                     >
                         {projects.map(p => (
                             <option key={p.id_licitacion} value={p.id_licitacion} className="text-black">
