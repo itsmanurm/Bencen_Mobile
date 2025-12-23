@@ -185,6 +185,25 @@ export function ProjectDetailDashboard({ projectId, onBack }) {
                                                     "{report.observaciones}"
                                                 </p>
                                             )}
+
+                                            {/* Image Preview */}
+                                            {report.photos && report.photos.length > 0 && (
+                                                <div className="mt-3">
+                                                    <div className="relative group/img max-w-sm">
+                                                        <img
+                                                            src={report.photos[0]}
+                                                            alt="Evidencia"
+                                                            className="w-full h-48 object-cover rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                                                            onClick={() => window.open(report.photos[0], '_blank')}
+                                                        />
+                                                        {report.photos.length > 1 && (
+                                                            <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-md text-white text-[10px] font-bold">
+                                                                +{report.photos.length - 1}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

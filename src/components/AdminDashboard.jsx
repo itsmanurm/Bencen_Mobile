@@ -37,9 +37,13 @@ export function AdminDashboard({ onLogout }) {
             if (data && data.length > 0) {
                 // Validate if stored selection exists in list
                 const storedId = localStorage.getItem('bencen_admin_project');
-                const isValid = data.some(p => p.id_licitacion === storedId);
+                const isValid = storedId && data.some(p => String(p.id_licitacion) === String(storedId));
 
-                if (!isValid) {
+                // If storedId is valid, ensure it's selected (React state init might have picked it up, but let's be safe)
+                if (isValid) {
+                    if (selectedProject !== storedId) setSelectedProject(storedId);
+                } else {
+                    // Invalid or no stored ID -> Default to first
                     setSelectedProject(data[0].id_licitacion);
                 }
             }

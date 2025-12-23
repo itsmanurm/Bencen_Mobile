@@ -339,7 +339,7 @@ export const api = {
             const { data: parts, error } = await supabase
                 .from('partes_diarios')
                 .select(`
-                    id, avance, fecha, observaciones, created_at, item_id, id_licitacion,
+                    id, avance, fecha, observaciones, created_at, item_id, id_licitacion, photos,
                     mobile_users (name, email)
                 `)
                 .order('created_at', { ascending: false })
@@ -715,7 +715,7 @@ export const api = {
             // 2. Fetch Progress
             const { data: reports, error: reportsError } = await supabase
                 .from('partes_diarios')
-                .select('item_id, avance, fecha, created_at, id, observaciones, mobile_users(name)')
+                .select('item_id, avance, fecha, created_at, id, observaciones, photos, mobile_users(name)')
                 .eq('id_licitacion', licitacionId)
                 .order('created_at', { ascending: false });
 

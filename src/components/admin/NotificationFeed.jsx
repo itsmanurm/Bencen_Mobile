@@ -66,6 +66,23 @@ export function NotificationFeed({ refreshTrigger }) {
                                                 "{act.observaciones}"
                                             </p>
                                         )}
+
+                                        {/* Image Preview */}
+                                        {act.photos && act.photos.length > 0 && (
+                                            <div className="mt-2">
+                                                <img
+                                                    src={act.photos[0]}
+                                                    alt="Evidencia"
+                                                    className="w-full h-32 object-cover rounded-lg border border-gray-100 hover:opacity-90 transition-opacity cursor-pointer"
+                                                    onClick={() => window.open(act.photos[0], '_blank')}
+                                                />
+                                                {act.photos.length > 1 && (
+                                                    <p className="text-[10px] text-gray-400 mt-1 text-right">
+                                                        +{act.photos.length - 1} más
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

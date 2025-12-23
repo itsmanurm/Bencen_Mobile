@@ -20,6 +20,19 @@ export function Login({ onLoginSuccess }) {
             });
 
             if (error) throw error;
+
+            // RBAC Check: Verify if user exists in mobile_users
+            const { data: profile, error: profileError } = await supabase
+                .from('mobile_users')
+                .select('id')
+                .eq('id', data.session.user.id)
+                .single();
+
+            if (profileError || !profile) {
+                await supabase.auth.signOut();
+                throw new Error("Acceso denegado: Tu usuario no tiene permisos para la App Mobile.");
+            }
+
             if (onLoginSuccess) onLoginSuccess(data.session);
 
         } catch (err) {

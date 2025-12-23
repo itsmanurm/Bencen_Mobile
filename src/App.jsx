@@ -96,7 +96,16 @@ function App() {
 
   // 1. No Session -> Login
   if (!session) {
-    return <Login onLoginSuccess={() => setLoading(true)} />;
+    return <Login />;
+  }
+
+  // 2. Session exists but Role is validating -> Loading Schema
+  if (!userRole) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-white">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
+      </div>
+    );
   }
 
   // 2. Pending Role -> Waiting Screen
